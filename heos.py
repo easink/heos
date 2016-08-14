@@ -8,12 +8,14 @@ import pprint
 
 HOST = ''
 PORT = 1255
+SSDP_HOST = '239.255.255.250'
+SSDP_PORT = 1900
 
 DISCOVERY_MSG = ('M-SEARCH * HTTP/1.1',
                  'ST: urn:schemas-denon-com:device:ACT-Denon:1',
                  'MX: 3',
                  'MAN: "ssdp:discover"',
-                 'HOST: 239.255.255.250:1900', '', '')
+                 'HOST: ' + SSDP_HOST + ':' + str(SSDP_PORT), '', '')
 
 
 class HeosException(Exception):
@@ -42,7 +44,7 @@ class Heos(object):
             try:
                 key, value = line.rsplit(': ')
                 result[key.lower()] = value
-            finally:
+            except:     # pylint: disable=bare-except
                 pass
         return result
 
@@ -66,7 +68,8 @@ class Heos(object):
         # sock.close()
 
         msg = "\r\n".join(DISCOVERY_MSG).encode('ascii')
-        sock.sendto(msg, ('239.255.255.250', 1900))
+        pprint.pprint(msg)
+        sock.sendto(msg, (SSDP_HOST, SSDP_PORT))
 
         try:
             data = sock.recv(1024)
@@ -118,7 +121,7 @@ class Heos(object):
     def recv_reply(self, command):
         " recv reply "
         while True:
-            msg = self._connection.recv(1024*1024)
+            msg = self._connection.recv(64*1024)
             pprint.pprint(msg)
             # simplejson doesnt need to decode from byte to ascii
             data = json.loads(msg.decode('ascii'))
