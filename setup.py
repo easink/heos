@@ -1,8 +1,9 @@
 from setuptools import setup
 
+exec(open('heos/version.py').read())
 
 setup(name='heos',
-      version=open('heos/version.py').read(),
+      version=__version__,
       description='Denon Heos',
       url='http://github.com/andryd/heos',
       author='Andreas Rydbrink',
