@@ -3,7 +3,7 @@ from setuptools import setup
 exec(open('heos/version.py').read())
 
 setup(name='heos',
-      version=__version__,
+      version='0.0.1',
       description='Denon Heos',
       url='http://github.com/andryd/heos',
       author='Andreas Rydbrink',
