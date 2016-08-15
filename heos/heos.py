@@ -6,8 +6,7 @@ import json
 import pprint
 # from time import sleep
 
-HOST = ''
-PORT = 1255
+HEOS_PORT = 1255
 SSDP_HOST = '239.255.255.250'
 SSDP_PORT = 1900
 
@@ -50,10 +49,12 @@ class Heos(object):
 
     def _parse_ssdp_location(self, data):
         import re
-        location = self._parse_ssdp(data)['location']
-        pprint.pprint(location)
-        addr = re.search('https?://([^:/]+)[:/].*$', location)
-        return addr.group(1)
+        try:
+            location = self._parse_ssdp(data)['location']
+            addr = re.search('https?://([^:/]+)[:/].*$', location)
+            return addr.group(1)
+        except:         # pylint: disable=bare-except
+            return None
 
     def discover(self, addr=None):
         " discover "
@@ -62,7 +63,7 @@ class Heos(object):
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
         # addr = socket.gethostname(socket.getfqdn())
         if addr:
-            sock.bind((addr, 1900))
+            sock.bind((addr, SSDP_PORT))
 
         # addr = sock.getsockname()[0]
         # sock.close()
@@ -72,13 +73,13 @@ class Heos(object):
         sock.sendto(msg, (SSDP_HOST, SSDP_PORT))
 
         try:
-            data = sock.recv(1024)
+            data = sock.recv(4096)
             addr = self._parse_ssdp_location(data)
         finally:
             sock.close()
         return addr
 
-    def connect(self, host=HOST, port=PORT):
+    def connect(self, host, port=HEOS_PORT):
         " connect "
         pprint.pprint((host, port))
         self._connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -234,5 +235,6 @@ if __name__ == "__main__":
     heos.get_play_state()
     heos.get_mute_state()
     heos.get_volume()
+    heos.set_volume(50)
     heos.get_groups()
     heos.close()
