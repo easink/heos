@@ -3,19 +3,11 @@
 
 import socket
 import json
-import pprint
+from pprint import pprint
 # from time import sleep
+import heosupnp
 
 HEOS_PORT = 1255
-SSDP_HOST = '239.255.255.250'
-SSDP_PORT = 1900
-
-DISCOVERY_MSG = ('M-SEARCH * HTTP/1.1',
-                 'ST: urn:schemas-denon-com:device:ACT-Denon:1',
-                 'MX: 3',
-                 'MAN: "ssdp:discover"',
-                 'HOST: ' + SSDP_HOST + ':' + str(SSDP_PORT), '', '')
-
 
 class HeosException(Exception):
     " HeosException class "
@@ -27,61 +19,40 @@ class HeosException(Exception):
 class Heos(object):
     " Heos class "
 
-    def __init__(self):
+    def __init__(self, host=None, verbose=False):
         self._players = None
-        self._pid = None
         self._play_state = None
         self._mute_state = None
         self._volume_level = None
-        # create a socket object
+
+        self._verbose = verbose
+        self._player_id = None
         self._connection = None
+        self._upnp = heosupnp.HeosUpnp()
+        self._upnp_renderer = None
 
-    # pylint: disable=no-self-use
-    def _parse_ssdp(self, data):
-        result = {}
-        for line in data.decode().rsplit('\r\n'):
-            try:
-                key, value = line.rsplit(': ')
-                result[key.lower()] = value
-            except:     # pylint: disable=bare-except
-                pass
-        return result
+        if not host:
+            # host = self._discover_ssdp()
+            url = self._upnp.discover()
+            host = self._url_to_addr(url)
+        self._connect(host)
 
-    def _parse_ssdp_location(self, data):
+        try:
+            self._player_id = self.get_players()[0]['pid']
+        except TypeError:
+            print('[E] No player found')
+
+    @staticmethod
+    def _url_to_addr(url):
         import re
         try:
-            location = self._parse_ssdp(data)['location']
-            addr = re.search('https?://([^:/]+)[:/].*$', location)
+            addr = re.search('https?://([^:/]+)[:/].*$', url)
             return addr.group(1)
         except:         # pylint: disable=bare-except
             return None
 
-    def discover(self, addr=None):
-        " discover "
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
-        # addr = socket.gethostname(socket.getfqdn())
-        if addr:
-            sock.bind((addr, SSDP_PORT))
-
-        # addr = sock.getsockname()[0]
-        # sock.close()
-
-        msg = "\r\n".join(DISCOVERY_MSG).encode('ascii')
-        pprint.pprint(msg)
-        sock.sendto(msg, (SSDP_HOST, SSDP_PORT))
-
-        try:
-            data = sock.recv(4096)
-            addr = self._parse_ssdp_location(data)
-        finally:
-            sock.close()
-        return addr
-
-    def connect(self, host, port=HEOS_PORT):
+    def _connect(self, host, port=HEOS_PORT):
         " connect "
-        pprint.pprint((host, port))
         self._connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._connection.connect((host, port))
 
@@ -90,20 +61,21 @@ class Heos(object):
         msg = 'heos://' + command
         if message:
             if 'pid' in message.keys() and message['pid'] is None:
-                message['pid'] = self._get_pid()
+                message['pid'] = self._get_player_id()
             msg += '?' + '&'.join("{}={}".format(key, val) for (key, val) in message.items())
         msg += '\r\n'
-        pprint.pprint(msg)
+        if self._verbose:
+            pprint(msg)
         self._connection.send(msg.encode('ascii'))
 
-        return self.recv_reply(command)
+        return self._recv_reply(command)
 
     # pylint: disable=no-self-use
     def _parse_message(self, message):
         " parse message "
         return dict(elem.split('=') for elem in message.split('&'))
 
-    def parse_command(self, command, data):
+    def _parse_command(self, command, data):
         " parse command "
         try:
             if command == data['heos']['command']:
@@ -119,16 +91,19 @@ class Heos(object):
 
         return None
 
-    def recv_reply(self, command):
+    def _recv_reply(self, command):
         " recv reply "
         while True:
             msg = self._connection.recv(64*1024)
-            pprint.pprint(msg)
+            if self._verbose:
+                pprint(msg)
+                pprint(msg.decode('ascii'))
             # simplejson doesnt need to decode from byte to ascii
             data = json.loads(msg.decode('ascii'))
-            reply = self.parse_command(command, data)
+            reply = self._parse_command(command, data)
             if reply is not None:
-                pprint.pprint(reply)
+                if self._verbose:
+                    pprint(reply)
                 return reply
 
     def close(self):
@@ -139,102 +114,113 @@ class Heos(object):
     def get_players(self):
         " get players "
         # heos.send_command('system/register_for_change_events?enable=on')
-        reply = self.send_command('player/get_players')
-        if reply:
-            self._pid = reply[0]['pid']
-        return self._pid
+        return self.send_command('player/get_players')
 
-    def _get_pid(self):
-        return self._pid
+    def _get_player_id(self):
+        return self._player_id
 
-    def get_player_info(self, pid=None):
+    def get_player_info(self):
         " get player info "
-        reply = self.send_command('player/get_player_info', {'pid': pid})
-        return reply
+        return self.send_command('player/get_player_info', {'pid': self._get_player_id()})
 
-    def get_play_state(self, pid=None):
+    def get_play_state(self):
         " get play state "
-        reply = self.send_command('player/get_play_state', {'pid': pid})
+        reply = self.send_command('player/get_play_state', {'pid': self._get_player_id()})
         if reply:
             self._play_state = reply['state']
         return self._play_state
 
-    def get_mute_state(self, pid=None):
+    def get_mute_state(self):
         " get mute state "
-        reply = self.send_command('player/get_mute', {'pid': pid})
+        reply = self.send_command('player/get_mute', {'pid': self._get_player_id()})
         if reply:
             self._mute_state = reply['state']
         return self._mute_state
 
-    def get_volume(self, pid=None):
+    def get_volume(self):
         " get volume "
-        reply = self.send_command('player/get_volume', {'pid': pid})
+        reply = self.send_command('player/get_volume', {'pid': self._get_player_id()})
         if reply:
             self._volume_level = reply['level']
         return self._volume_level
 
-    def set_volume(self, volume_level, pid=None):
+    def set_volume(self, volume_level):
         " set volume "
         if volume_level > 100:
             volume_level = 100
         if volume_level < 0:
             volume_level = 0
-        reply = self.send_command('player/set_volume', {'pid': pid, 'level': volume_level})
+        reply = self.send_command('player/set_volume', {'pid': self._get_player_id(),
+                                                        'level': volume_level})
         if reply:
             self._volume_level = reply['level']
         return self._volume_level
 
-    def volume_level_up(self, step=10, pid=None):
+    def volume_level_up(self, step=10):
         " volume level up "
-        volume_level = self.get_volume(pid)
-        self.set_volume(volume_level + step, pid)
+        volume_level = self.get_volume()
+        self.set_volume(volume_level + step)
 
-    def volume_level_down(self, step=10, pid=None):
+    def volume_level_down(self, step=10):
         " volume level down "
-        volume_level = self.get_volume(pid)
-        self.set_volume(volume_level - step, pid)
+        volume_level = self.get_volume()
+        self.set_volume(volume_level - step)
 
-    # pylint: disable=unused-argument
-    def play_url(self, url, in_secs=0.0, pid=None):
-        " play url "
-        # volume_old = self.get_volume(pid)
-        # secs_to_go = in_secs
+    def get_queue(self):
+        " get queue "
+        reply = self.send_command('player/get_queue', {'pid': self._get_player_id()})
+        return reply
 
-        # # drop volume
-        # vol = volume_old
-        # while vol != 0:
-        #     vol = self.get_volume(pid)
-        #     sleep(0.2)
-        #     secs_to_go -= 0.2
-        #     volume_diff = int(vol / secs_to_go)
-        #     self.volume_level_down(volume_diff, pid)
-        #     vol -= volume_diff
+    def clear_queue(self):
+        " clear queue "
+        reply = self.send_command('player/clear_queue', {'pid': self._get_player_id()})
+        return reply
 
-        # self.set_volume(volume_old, pid)
-        self.send_command('browser/playstream', {'pid': pid, 'url': url})
-
-        return None
+    def play_queue(self, qid):
+        " play queue "
+        reply = self.send_command('player/play_queue', {'pid': self._get_player_id(),
+                                                        'qid': qid})
+        return reply
 
     def get_groups(self):
         " get groups "
         reply = self.send_command('group/get_groups')
         return reply
 
-    def toggle_mute(self, pid=None):
+    def toggle_mute(self):
         " toggle mute "
-        reply = self.send_command('player/toggle_mute', {'pid': pid})
+        reply = self.send_command('player/toggle_mute', {'pid': self._get_player_id()})
         return reply
 
+    def get_music_sources(self):
+        " get music sources "
+        reply = self.send_command('browser/get_music_sources', {'range': '0,29'})
+        return reply
 
-if __name__ == "__main__":
+    def get_browse_source(self, sid):
+        " browse source "
+        reply = self.send_command('browser/browse', {'sid': sid, 'range': '0,29'})
+        return reply
+
+    def play_content(self, content, content_type='audio/mpeg'):
+        self._upnp.play_content(content, content_type)
+
+
+def main():
+    " main "
     heos = Heos()
-    address = heos.discover()
-    heos.connect(address)
-    heos.get_players()
     # heos.get_player_info()
     heos.get_play_state()
     heos.get_mute_state()
     heos.get_volume()
-    heos.set_volume(50)
+    heos.set_volume(10)
     heos.get_groups()
+
+    with open('hello.mp3', mode='rb') as f:
+        content = f.read()
+    content_type = 'audio/mpeg'
+    heos.play_content(content, content_type)
     heos.close()
+
+if __name__ == "__main__":
+    main()
