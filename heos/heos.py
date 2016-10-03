@@ -5,7 +5,7 @@ import socket
 import json
 from pprint import pprint
 # from time import sleep
-import heosupnp
+import heos.heosupnp as heosupnp
 
 HEOS_PORT = 1255
 
