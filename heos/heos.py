@@ -101,9 +101,9 @@ class Heos(object):
             msg = self._connection.recv(64*1024)
             if self._verbose:
                 pprint(msg)
-                pprint(msg.decode('ascii'))
+                pprint(msg.decode()
             # simplejson doesnt need to decode from byte to ascii
-            data = json.loads(msg.decode('ascii'))
+            data = json.loads(msg.decode())
             reply = self._parse_command(command, data)
             if reply is not None:
                 if self._verbose:
