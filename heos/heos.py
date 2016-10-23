@@ -207,6 +207,16 @@ class Heos(object):
         reply = self.send_command('player/clear_queue', {'pid': self._get_player_id()})
         return reply
 
+    def play_next(self):
+        " play next "
+        reply = self.send_command('player/play_prev', {'pid': self._get_player_id()})
+        return reply
+
+    def play_prev(self):
+        " play prev "
+        reply = self.send_command('player/play_prev', {'pid': self._get_player_id()})
+        return reply
+
     def play_queue(self, qid):
         " play queue "
         reply = self.send_command('player/play_queue', {'pid': self._get_player_id(),
