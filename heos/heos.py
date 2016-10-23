@@ -20,6 +20,7 @@ class Heos(object):
     " Heos class "
 
     def __init__(self, host=None, verbose=False):
+        self._host = host
         self._players = None
         self._play_state = None
         self._mute_state = None
@@ -31,11 +32,11 @@ class Heos(object):
         self._upnp = heosupnp.HeosUpnp()
         self._upnp_renderer = None
 
-        if not host:
+        if not self._host:
             # host = self._discover_ssdp()
             url = self._upnp.discover()
-            host = self._url_to_addr(url)
-        self._connect(host)
+            self._host = self._url_to_addr(url)
+        self.connect()
 
         try:
             self._player_id = self.get_players()[0]['pid']
@@ -50,6 +51,9 @@ class Heos(object):
             return addr.group(1)
         except:         # pylint: disable=bare-except
             return None
+
+    def connect(self):
+        self._connect(self._host)
 
     def _connect(self, host, port=HEOS_PORT):
         " connect "
