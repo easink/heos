@@ -290,6 +290,8 @@ class HeosUpnp(object):
 
     def _play_uri(self, uri):
         " play an url "
+        if not self._url:
+            self.discover()
         if not self._renderer_uri:
             self.query_renderer()
         self._upnp.set_avtransport_uri(uri, self._renderer_uri)

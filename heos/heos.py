@@ -166,6 +166,28 @@ class Heos(object):
         volume_level = self.get_volume()
         self.set_volume(volume_level - step)
 
+    def _set_play_state(self, state):
+        " set play state "
+        if state not in ('play', 'pause', 'stop'):
+            HeosException('Not an accepted play state {}.'.format(state))
+
+        reply = self.send_command('player/set_play_state', {'pid': self._get_player_id(),
+                                                            'state': state})
+        if reply:
+            self._play_state = state
+
+    def stop(self):
+        " stop player "
+        self._set_play_state('stop')
+
+    def play(self):
+        " play "
+        self._set_play_state('play')
+
+    def pause(self):
+        " pause "
+        self._set_play_state('pause')
+
     def get_queue(self):
         " get queue "
         reply = self.send_command('player/get_queue', {'pid': self._get_player_id()})
@@ -208,7 +230,7 @@ class Heos(object):
 
 def main():
     " main "
-    heos = Heos()
+    heos = Heos(verbose=True)
     # heos.get_player_info()
     heos.get_play_state()
     heos.get_mute_state()
