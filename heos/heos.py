@@ -192,6 +192,11 @@ class Heos(object):
         " pause "
         self._set_play_state('pause')
 
+    def get_now_playing_media(self):
+        " get playing media "
+        reply = self.send_command('player/get_now_playing_media', {'pid': self._get_player_id()})
+        return reply
+
     def get_queue(self):
         " get queue "
         reply = self.send_command('player/get_queue', {'pid': self._get_player_id()})
