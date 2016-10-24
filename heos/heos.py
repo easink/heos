@@ -71,11 +71,10 @@ class Heos(object):
         if self._verbose:
             pprint(msg)
         self._connection.send(msg.encode('ascii'))
-
         return self._recv_reply(command)
 
-    # pylint: disable=no-self-use
-    def _parse_message(self, message):
+    @staticmethod
+    def _parse_message(message):
         " parse message "
         return dict(elem.split('=') for elem in message.split('&'))
 
